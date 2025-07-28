@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/kahnaisehC/sajcredez/pkg"
 )
 
 func main() {
-	fmt.Println("hello, wld")
+	s := board.CreateSajcredez()
+	fmt.Println(s.GetBoardString())
 }
