@@ -2,6 +2,7 @@ package board
 
 import (
 	"fmt"
+	"strings"
 )
 
 type Piece int8
@@ -88,10 +89,10 @@ func GetPieceColor(p Piece) Color {
 }
 
 type Board interface {
-	GetBoardString() string
+	GetBoardString() string // Done
 	GetHistoryString() string
 
-	GetPiece(Square) Piece
+	GetPiece(Square) Piece // Done
 	SquareIsThreattened(Color) []Square
 	CheckMoveLegality(Move) error
 
@@ -137,7 +138,7 @@ func (s *Sajcredez) GetPiece(sq Square) Piece {
 }
 
 // WARNING: This function is really slow due to constant string concatenation
-func (s *Sajcredez) GetBoardString() string {
+func (s *Sajcredez) getBoardStringNoBuilder() string {
 	boardString := ""
 	boardString += fmt.Sprintf("whiteEnhances: %d blackEnhances: %d\ncastlingRights: ", s.whiteEnhances, s.blackEnhances)
 
@@ -189,4 +190,64 @@ func (s *Sajcredez) GetBoardString() string {
 		boardString += "\n"
 	}
 	return boardString
+}
+
+func (s *Sajcredez) GetBoardString() string {
+	boardStringBuilder := strings.Builder{}
+	// the size of the initial boardString in bytes (using
+	// piece emotes instead of chars) is 258
+	estimatedBoardStringSize := 260
+	boardStringBuilder.Grow(estimatedBoardStringSize)
+
+	fmt.Fprintf(&boardStringBuilder, "whiteEnhances: %d blackEnhances: %d\ncastlingRights: ", s.whiteEnhances, s.blackEnhances)
+
+	if s.WhiteKingCastle {
+		boardStringBuilder.WriteByte('K')
+	} else {
+		boardStringBuilder.WriteByte('-')
+	}
+
+	if s.WhiteQueenCastle {
+		boardStringBuilder.WriteByte('Q')
+	} else {
+		boardStringBuilder.WriteByte('-')
+	}
+
+	if s.BlackKingCastle {
+		boardStringBuilder.WriteByte('k')
+	} else {
+		boardStringBuilder.WriteByte('-')
+	}
+
+	if s.BlackQueenCastle {
+		boardStringBuilder.WriteByte('q')
+	} else {
+		boardStringBuilder.WriteByte('-')
+	}
+	boardStringBuilder.Write([]byte("\nturn: "))
+
+	switch s.turn {
+	case WHITE:
+		boardStringBuilder.Write([]byte("WHITE\n"))
+	case BLACK:
+		boardStringBuilder.Write([]byte("BLACK\n"))
+
+	}
+
+	boardStringBuilder.WriteByte('\t')
+
+	for col := range s.board {
+		boardStringBuilder.WriteString(fmt.Sprintf("%d\t", col+1))
+	}
+	boardStringBuilder.WriteByte('\n')
+	for row := range s.board {
+		boardStringBuilder.WriteString(fmt.Sprintf("%d\t", row+1))
+		for _, piece := range s.board[row] {
+			boardStringBuilder.WriteRune(pieceToChar[piece])
+			boardStringBuilder.WriteByte('\t')
+		}
+		boardStringBuilder.WriteByte('\n')
+	}
+	fmt.Println(len(boardStringBuilder.String()))
+	return boardStringBuilder.String()
 }
