@@ -27,6 +27,44 @@ const (
 	BKING
 )
 
+// piece moves and slides
+
+var kingMoves = []Square{
+	{1, 1},
+	{1, 0},
+	{1, -1},
+	{0, 1},
+	{0, -1},
+	{-1, 1},
+	{-1, 0},
+	{-1, -1},
+}
+
+var knightMoves = []Square{
+	{2, 1},
+	{-2, 1},
+	{-2, -1},
+	{2, -1},
+	{1, 2},
+	{-1, 2},
+	{-1, -2},
+	{1, -2},
+}
+
+var rookSlides = []Square{
+	{0, -1},
+	{0, 1},
+	{1, 0},
+	{-1, 0},
+}
+
+var bishopSlides = []Square{
+	{1, 1},
+	{-1, 1},
+	{-1, -1},
+	{1, -1},
+}
+
 var pieceToChar = map[Piece]rune{
 	// white pieces: ♕
 	// black pieces: ♛
@@ -55,23 +93,32 @@ var default_board = [sajcredezRows][sajcredezCols]Piece{
 
 type Options struct{}
 
-type Color bool
+type Color int8
 
 const (
-	WHITE Color = false
-	BLACK Color = true
+	NO_COLOR Color = 0
+	WHITE    Color = 1
+	BLACK    Color = 2
 )
 
 type Enhance int8
 
 const (
 	NO_ENHANCE Enhance = (iota)
-	ENHANCE_MOVEMENT
+	ENHANCE_MOVE
 )
 
 type Square struct {
 	col int8
 	row int8
+}
+
+func addSquares(a, b Square) (sum Square) {
+	sum = Square{
+		col: a.col + b.col,
+		row: a.row + b.row,
+	}
+	return
 }
 
 type Move struct {
@@ -91,7 +138,7 @@ func GetPieceColor(p Piece) Color {
 	} else if p >= BPAWN && p <= BKING {
 		return BLACK
 	}
-	return WHITE
+	return NO_COLOR
 }
 
 type Board interface {
@@ -237,7 +284,6 @@ func (s *Sajcredez) GetBoardString() string {
 		boardStringBuilder.Write([]byte("WHITE\n"))
 	case BLACK:
 		boardStringBuilder.Write([]byte("BLACK\n"))
-
 	}
 
 	boardStringBuilder.WriteByte('\t')
@@ -315,7 +361,201 @@ func (s *Sajcredez) CheckMoveLegality(move Move) error {
 		}
 	}
 
+	// check if fromPiece and toPiece are of the same color
+	ignoreIfFromPieceToPieceSameColor := move.enhancement == ENHANCE_MOVE && (move.fromPiece == WKNIGHT || move.fromPiece == BKNIGHT)
+	if !ignoreIfFromPieceToPieceSameColor && GetPieceColor(move.fromPiece) == GetPieceColor(move.toPiece) {
+		return errors.New(errorHeader + "fromPiece and toPiece are from the same color")
+	}
+
 	// now comes the fun part
+	canMove := false
+	switch move.enhancement {
+	case NO_ENHANCE:
+		{
+			switch move.fromPiece {
+			case WKNIGHT:
+				fallthrough
+			case BKNIGHT:
+				for _, nm := range knightMoves {
+					if addSquares(nm, move.from) == move.to {
+						canMove = true
+					}
+				}
+			case WKING:
+				fallthrough
+			case BKING:
+				for _, km := range kingMoves {
+					if addSquares(km, move.from) == move.to {
+						canMove = true
+					}
+				}
+			case WROOK:
+				fallthrough
+			case BROOK:
+				for _, rs := range rookSlides {
+					for nextSquare := addSquares(rs, move.from); s.inBounds(nextSquare); nextSquare = addSquares(rs, nextSquare) {
+						if GetPieceColor(s.GetPiece(nextSquare)) == GetPieceColor(move.fromPiece) {
+							break
+						}
+						if nextSquare == move.from {
+							canMove = true
+						}
+						if GetPieceColor(s.GetPiece(nextSquare)) != NO_COLOR {
+							break
+						}
+					}
+				}
+			case WBISHOP:
+				fallthrough
+			case BBISHOP:
+				for _, bs := range bishopSlides {
+					for nextSquare := addSquares(bs, move.from); s.inBounds(nextSquare); nextSquare = addSquares(bs, nextSquare) {
+						if GetPieceColor(s.GetPiece(nextSquare)) == GetPieceColor(move.fromPiece) {
+							break
+						}
+						if nextSquare == move.from {
+							canMove = true
+						}
+						if GetPieceColor(s.GetPiece(nextSquare)) != NO_COLOR {
+							break
+						}
+					}
+				}
+			case WPAWN:
+				squareUp := Square{col: move.from.col + 1, row: move.from.row}
+				if move.to == squareUp && s.GetPiece(move.to) == EMPTY {
+					canMove = true
+				}
+				squarePositiveDiagonal := Square{col: move.from.col + 1, row: move.from.row + 1}
+				if move.to == squarePositiveDiagonal && move.toPiece != EMPTY {
+					canMove = true
+				}
+				squareNegativeDiagonal := Square{col: move.from.col + 1, row: move.from.row - 1}
+				if move.to == squareNegativeDiagonal && move.toPiece != EMPTY {
+					canMove = true
+				}
+
+			case BPAWN:
+				squareDown := Square{col: move.from.col - 1, row: move.from.row}
+				if move.to == squareDown && s.GetPiece(move.to) == EMPTY {
+					canMove = true
+				}
+				squarePositiveDiagonal := Square{col: move.from.col + 1, row: move.from.row + 1}
+				if move.to == squarePositiveDiagonal && move.toPiece != EMPTY {
+					canMove = true
+				}
+				squareNegativeDiagonal := Square{col: move.from.col + 1, row: move.from.row - 1}
+				if move.to == squareNegativeDiagonal && move.toPiece != EMPTY {
+					canMove = true
+				}
+
+			default:
+				return errors.New(errorHeader + "invalid fromPiece code (probably trying to move a piece from an EMPTY square)")
+			}
+		}
+
+	case ENHANCE_MOVE:
+		{
+			switch move.fromPiece {
+			case WKNIGHT:
+				fallthrough
+			case BKNIGHT:
+				for _, nm := range knightMoves {
+					if addSquares(nm, move.from) == move.to {
+						canMove = true
+					}
+				}
+			case WKING:
+				fallthrough
+			case BKING:
+				for _, km := range kingMoves {
+					if addSquares(km, move.from) == move.to {
+						canMove = true
+					}
+				}
+			case WROOK:
+				fallthrough
+			case BROOK:
+				for _, rs := range rookSlides {
+					for nextSquare := addSquares(rs, move.from); s.inBounds(nextSquare); nextSquare = addSquares(rs, nextSquare) {
+						if GetPieceColor(s.GetPiece(nextSquare)) == GetPieceColor(move.fromPiece) {
+							break
+						}
+						if nextSquare == move.from {
+							canMove = true
+						}
+					}
+				}
+			case WBISHOP:
+				fallthrough
+			case BBISHOP:
+				for _, bs := range bishopSlides {
+
+					// make slide go "through" the board
+					nextSquare := addSquares(bs, move.from)
+					nextSquare.col = (nextSquare.col + sajcredezCols) % sajcredezCols
+					nextSquare.row = (nextSquare.row + sajcredezRows) % sajcredezRows
+
+					count := 0
+					maxiterations := int(sajcredezRows) * int(sajcredezCols)
+
+					for s.inBounds(nextSquare) {
+						if count > maxiterations {
+							return errors.New(errorHeader + "infinite iteration on bishop slides (implementation error, this shouldnt happen)")
+						}
+						if GetPieceColor(s.GetPiece(nextSquare)) == GetPieceColor(move.fromPiece) {
+							break
+						}
+						if nextSquare == move.from {
+							canMove = true
+						}
+						if GetPieceColor(s.GetPiece(nextSquare)) != NO_COLOR {
+							break
+						}
+
+						nextSquare := addSquares(bs, move.from)
+						nextSquare.col = (nextSquare.col + sajcredezCols) % sajcredezCols
+						nextSquare.row = (nextSquare.row + sajcredezRows) % sajcredezRows
+					}
+				}
+			case WPAWN:
+				squareUp := Square{col: move.from.col + 1, row: move.from.row}
+				if move.to == squareUp {
+					canMove = true
+				}
+				squarePositiveDiagonal := Square{col: move.from.col + 1, row: move.from.row + 1}
+				if move.to == squarePositiveDiagonal {
+					canMove = true
+				}
+				squareNegativeDiagonal := Square{col: move.from.col + 1, row: move.from.row - 1}
+				if move.to == squareNegativeDiagonal {
+					canMove = true
+				}
+
+			case BPAWN:
+				squareDown := Square{col: move.from.col - 1, row: move.from.row}
+				if move.to == squareDown {
+					canMove = true
+				}
+				squarePositiveDiagonal := Square{col: move.from.col + 1, row: move.from.row + 1}
+				if move.to == squarePositiveDiagonal {
+					canMove = true
+				}
+				squareNegativeDiagonal := Square{col: move.from.col + 1, row: move.from.row - 1}
+				if move.to == squareNegativeDiagonal {
+					canMove = true
+				}
+
+			default:
+				return errors.New(errorHeader + "invalid fromPiece code (probably trying to move a piece from an EMPTY square)")
+			}
+		}
+	}
+	if !canMove {
+		// specialize the error somehow
+		error := "move is illegal due to something (improve this message)"
+		return errors.New(errorHeader + error)
+	}
 
 	return nil
 }
