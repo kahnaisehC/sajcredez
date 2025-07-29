@@ -1,11 +1,17 @@
 package board
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
 
 type Piece int8
+
+const (
+	sajcredezCols = int8(7)
+	sajcredezRows = int8(7)
+)
 
 const (
 	EMPTY Piece = iota
@@ -37,7 +43,7 @@ var pieceToChar = map[Piece]rune{
 	BKING:   '♚',
 }
 
-var default_board = [7][7]Piece{
+var default_board = [sajcredezRows][sajcredezCols]Piece{
 	{WROOK, WKNIGHT, WBISHOP, WKING, WBISHOP, WKNIGHT, WROOK},
 	{WPAWN, WPAWN, WPAWN, WPAWN, WPAWN, WPAWN, WPAWN},
 	{EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY},
@@ -103,9 +109,9 @@ type Board interface {
 type Sajcredez struct {
 	History []Move
 
-	board         [7][7]Piece
-	whiteEnhances Enhance
-	blackEnhances Enhance
+	board         [sajcredezRows][sajcredezCols]Piece
+	whiteEnhances int
+	blackEnhances int
 	turn          Color
 
 	BlackKingCastle  bool
@@ -248,6 +254,68 @@ func (s *Sajcredez) GetBoardString() string {
 		}
 		boardStringBuilder.WriteByte('\n')
 	}
-	fmt.Println(len(boardStringBuilder.String()))
 	return boardStringBuilder.String()
+}
+
+func ParseMove(str string) (Move, error) {
+	move := Move{}
+	return move, nil
+}
+
+func (s *Sajcredez) inBounds(sq Square) bool {
+	// sq.col is between this two values AND
+	colsLowEnd := int8(0)
+	colsHighEnd := sajcredezCols
+
+	// sq.row is between this two values
+	rowsLowEnd := int8(0)
+	rowsHighEnd := sajcredezRows
+
+	return colsLowEnd <= sq.col && sq.col < colsHighEnd && rowsLowEnd <= sq.row && sq.row < rowsHighEnd
+}
+
+func (s *Sajcredez) CheckMoveLegality(move Move) error {
+	const errorHeader = "CheckMoveLegality: "
+
+	// check if from is inbounds
+	if !s.inBounds(move.from) {
+		return errors.New(errorHeader + "from is out of bounds")
+	}
+	// check if to is inbounds
+	if !s.inBounds(move.to) {
+		return errors.New(errorHeader + "to is out of bounds")
+	}
+
+	// check if fromPiece is correct
+	if move.fromPiece != s.GetPiece(move.from) {
+		return errors.New(errorHeader + "fromPiece is not the piece in from")
+	}
+
+	// check if toPiece is correct
+	if move.toPiece != s.GetPiece(move.to) {
+		return errors.New(errorHeader + "toPiece is not the piece in to")
+	}
+
+	// check if it is the correct turn to play
+	if s.turn != GetPieceColor(s.GetPiece(move.from)) {
+		return errors.New(errorHeader + "incorrect turn to play")
+	}
+
+	// check if you have enhancement available
+	if move.enhancement != NO_ENHANCE {
+		var enhancesAvailable int
+		switch s.turn {
+		case BLACK:
+			enhancesAvailable = s.blackEnhances
+		case WHITE:
+			enhancesAvailable = s.whiteEnhances
+		}
+		if enhancesAvailable == 0 {
+			return errors.New(errorHeader + "not enough enhances available")
+		}
+	}
+
+	// now comes the fun part
+
+	return nil
 }
