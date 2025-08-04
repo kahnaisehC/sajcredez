@@ -320,6 +320,10 @@ func (s *Sajcredez) inBounds(sq Square) bool {
 	return colsLowEnd <= sq.col && sq.col < colsHighEnd && rowsLowEnd <= sq.row && sq.row < rowsHighEnd
 }
 
+func (c *Sajcredez MakeMove(move Move) error{
+	if s.CheckMoveLegality(
+}
+
 func (s *Sajcredez) CheckMoveLegality(move Move) error {
 	const errorHeader = "CheckMoveLegality: "
 
